@@ -1,4 +1,4 @@
-# formfor
+# FormFor
 
 TypeScript SDK for [FormFor](https://formfor.ai) -- structured input infrastructure for AI agents. Collect human input, approvals, and structured data from within your AI workflows.
 
@@ -13,174 +13,154 @@ npm install formfor
 ```typescript
 import { FormFor } from 'formfor'
 
-const formfor = new FormFor('ff_live_...')
-const { approved } = await formfor.ask('Deploy to production?', { to: 'ops@company.com' })
+const ff = new FormFor('ff_live_...')
+
+// Yes/no approval -- blocks until the human responds
+const { approved } = await ff.ask('Deploy to production?', {
+  to: 'ops@company.com',
+})
+
+// Collect structured data
+const response = await ff.collect({
+  title: 'Customer Onboarding',
+  to: 'customer@example.com',
+  fields: [
+    { id: 'name', type: 'text', label: 'Full Name', required: true },
+    { id: 'plan', type: 'select', label: 'Plan', options: ['starter', 'pro', 'enterprise'] },
+  ],
+})
+
+console.log(response.data) // { name: "Jane Smith", plan: "pro" }
 ```
 
-## Methods
+## API
 
-### `ask(question, options)` -- Quick yes/no approval
+### `ask(question, options)` -- Yes/no approval
 
-Creates a confirmation form, sends it, and waits for a response.
+Creates a confirmation form, delivers it, and waits for the response.
 
 ```typescript
-const result = await formfor.ask('Approve $5,000 expense?', {
+const result = await ff.ask('Approve $5,000 expense?', {
   to: 'manager@company.com',
   context: 'Q1 marketing budget',
   expires: '24h',
 })
 
-console.log(result.approved) // true | false
-console.log(result.notes)    // optional reviewer notes
-console.log(result.form_id)  // form ID for reference
+result.approved  // true | false
+result.notes     // optional reviewer notes
+result.form_id   // form ID for reference
 ```
 
-**Parameters:**
-- `question` (string) -- The yes/no question to ask
-- `options.to` (string) -- Recipient email or phone
-- `options.context` (string, optional) -- Additional context for the recipient
-- `options.expires` (string, optional) -- Expiration duration (e.g., `"1h"`, `"24h"`, `"7d"`)
-- `options.webhook_url` (string, optional) -- Webhook URL for async notification
-- `options.metadata` (Record<string, any>, optional) -- Custom metadata
+| Option | Type | Description |
+|--------|------|-------------|
+| `to` | `string` | Recipient email (required) |
+| `context` | `string` | Background info for the recipient |
+| `expires` | `string` | Duration: `"1h"`, `"24h"`, `"7d"` |
+| `webhook_url` | `string` | Async webhook notification |
+| `metadata` | `Record<string, any>` | Custom metadata |
 
-### `collect(options)` -- Collect structured data
+### `collect(options)` -- Structured data collection
 
 Creates a multi-field form and waits for the response.
 
 ```typescript
-const response = await formfor.collect({
-  title: 'Customer Onboarding',
-  to: 'customer@example.com',
+const response = await ff.collect({
+  title: 'Bug Report',
+  to: 'eng@company.com',
   fields: [
-    { id: 'name', type: 'text', label: 'Full Name', required: true },
-    { id: 'email', type: 'email', label: 'Work Email', required: true },
-    { id: 'company', type: 'text', label: 'Company Name' },
-    { id: 'plan', type: 'select', label: 'Plan', options: ['starter', 'pro', 'enterprise'] },
+    { id: 'severity', type: 'select', label: 'Severity', options: ['P0', 'P1', 'P2'] },
+    { id: 'description', type: 'textarea', label: 'Description', required: true },
+    { id: 'screenshot', type: 'file', label: 'Screenshot' },
   ],
   expires: '7d',
 })
-
-console.log(response.data.name)    // "Jane Smith"
-console.log(response.data.email)   // "jane@acme.com"
-console.log(response.data.plan)    // "pro"
 ```
 
-### `createForm(params)` -- Create a form (non-blocking)
+### `createForm(params)` -- Non-blocking
 
-Creates a form and returns immediately without waiting for a response.
+Creates a form and returns immediately.
 
 ```typescript
-const form = await formfor.createForm({
-  title: 'Feedback Survey',
-  fields: [
-    { id: 'rating', type: 'rating', label: 'How would you rate us?' },
-    { id: 'feedback', type: 'textarea', label: 'Any comments?' },
-  ],
+const form = await ff.createForm({
+  title: 'Feedback',
+  fields: [{ id: 'rating', type: 'rating', label: 'How would you rate us?' }],
   to: 'user@example.com',
   webhook_url: 'https://your-app.com/webhooks/formfor',
-  expires: '7d',
 })
 
-console.log(form.id)     // "form_abc123"
-console.log(form.url)    // "https://formfor.ai/f/form_abc123"
-console.log(form.status) // "pending"
+form.id      // "form_abc123"
+form.url     // "https://forms.formfor.ai/form_abc123"
+form.status  // "pending"
 ```
 
-### `getResponse(formId)` -- Get form response
-
-Returns the response for a form, or `null` if not yet completed.
+### `getResponse(formId)` -- Get response
 
 ```typescript
-const response = await formfor.getResponse('form_abc123')
-if (response) {
-  console.log(response.data)
-}
+const response = await ff.getResponse('form_abc123')
+// null if not yet completed
 ```
 
 ### `listForms(options?)` -- List forms
 
 ```typescript
-const result = await formfor.listForms({
-  status: 'pending',
-  limit: 10,
-  offset: 0,
-})
-
-console.log(result.forms)  // Form[]
-console.log(result.total)  // total count
+const { forms, total } = await ff.listForms({ status: 'pending', limit: 10 })
 ```
 
-### `cancelForm(formId)` -- Cancel a pending form
+### `cancelForm(formId)` -- Cancel
 
 ```typescript
-await formfor.cancelForm('form_abc123')
+await ff.cancelForm('form_abc123')
 ```
 
-### `remindForm(formId)` -- Send a reminder
+### `remindForm(formId)` -- Send reminder
 
 ```typescript
-await formfor.remindForm('form_abc123')
+await ff.remindForm('form_abc123')
 ```
 
-### `waitForResponse(formId, timeout?)` -- Wait for response
+### `waitForResponse(formId, timeout?)` -- Wait
 
-Waits for a form response using WebSocket (with automatic polling fallback).
+Waits for a response via WebSocket with automatic polling fallback.
 
 ```typescript
-const form = await formfor.createForm({ /* ... */ })
-const response = await formfor.waitForResponse(form.id, '2h')
+const form = await ff.createForm({ /* ... */ })
+const response = await ff.waitForResponse(form.id, '2h')
 ```
 
 ## Field Types
 
 | Type | Description |
 |------|-------------|
-| `text` | Single-line text input |
-| `textarea` | Multi-line text input |
+| `text` | Single-line text |
+| `textarea` | Multi-line text |
 | `number` | Numeric input |
 | `email` | Email address |
 | `url` | URL |
 | `phone` | Phone number |
-| `select` | Single selection from options |
-| `multi_select` | Multiple selections from options |
-| `confirm` | Yes/no confirmation |
+| `select` | Single selection |
+| `multi_select` | Multiple selections |
+| `confirm` | Yes/no |
 | `date` | Date picker |
-| `datetime` | Date and time picker |
+| `datetime` | Date and time |
 | `file` | File upload |
 | `rating` | Star rating |
 | `signature` | Signature capture |
 
 ## Conditional Fields
 
-Show fields based on other field values:
-
 ```typescript
-const response = await formfor.collect({
-  to: 'user@example.com',
-  fields: [
-    { id: 'role', type: 'select', label: 'Role', options: ['engineer', 'manager', 'other'] },
-    { id: 'team_size', type: 'number', label: 'Team Size', when: { field: 'role', equals: 'manager' } },
-    { id: 'role_other', type: 'text', label: 'Specify Role', when: { field: 'role', equals: 'other' } },
-  ],
-})
+fields: [
+  { id: 'role', type: 'select', label: 'Role', options: ['engineer', 'manager', 'other'] },
+  { id: 'team_size', type: 'number', label: 'Team Size', when: { field: 'role', equals: 'manager' } },
+  { id: 'role_other', type: 'text', label: 'Specify', when: { field: 'role', equals: 'other' } },
+]
 ```
 
 ## Validation
 
 ```typescript
-{
-  id: 'age',
-  type: 'number',
-  label: 'Age',
-  validate: { min: 18, max: 120 }
-}
-
-{
-  id: 'document',
-  type: 'file',
-  label: 'Upload Document',
-  validate: { maxSize: '10MB', accept: '.pdf,.docx' }
-}
+{ id: 'age', type: 'number', label: 'Age', validate: { min: 18, max: 120 } }
+{ id: 'doc', type: 'file', label: 'Document', validate: { maxSize: '10MB', accept: '.pdf,.docx' } }
 ```
 
 ## Error Handling
@@ -189,12 +169,12 @@ const response = await formfor.collect({
 import { FormFor, FormForError } from 'formfor'
 
 try {
-  const result = await formfor.ask('Approve?', { to: 'user@example.com', expires: '1h' })
+  await ff.ask('Approve?', { to: 'user@example.com', expires: '1h' })
 } catch (err) {
   if (err instanceof FormForError) {
-    console.error(err.code)    // "timeout", "expired", "api_error", etc.
-    console.error(err.message) // Human-readable message
-    console.error(err.status)  // HTTP status code (if applicable)
+    err.code     // "timeout", "expired", "api_error", etc.
+    err.message  // Human-readable
+    err.status   // HTTP status (if applicable)
   }
 }
 ```
@@ -202,34 +182,28 @@ try {
 ## Configuration
 
 ```typescript
-const formfor = new FormFor('ff_live_...', {
-  baseUrl: 'https://api.formfor.ai',  // Custom API base URL
+const ff = new FormFor('ff_live_...', {
+  baseUrl: 'https://api.formfor.ai',  // default
 })
 ```
 
 ## TypeScript
 
-All types are exported for full TypeScript support:
+All types exported:
 
 ```typescript
 import type {
-  FormField,
-  FieldType,
-  Form,
-  FormResponse,
-  CreateFormParams,
-  AskOptions,
-  AskResult,
-  CollectOptions,
-  Branding,
-  ListFormsOptions,
-  ListFormsResult,
-  FormForOptions,
+  FormField, FieldType, Form, FormResponse, CreateFormParams,
+  AskOptions, AskResult, CollectOptions, Branding,
+  ListFormsOptions, ListFormsResult, FormForOptions,
 } from 'formfor'
 ```
 
 ## Links
 
-- [Documentation](https://docs.formfor.ai)
-- [API Reference](https://docs.formfor.ai/api)
+- [Documentation](https://formfor.ai/docs)
 - [Dashboard](https://app.formfor.ai)
+
+## License
+
+MIT
